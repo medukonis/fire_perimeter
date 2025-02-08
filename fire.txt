@@ -1,0 +1,63 @@
+'rename fire.txt to fire.bas
+'open new excel sheet and save as .xslm
+'open developer tools
+'File -> import module fire.bas
+'Tools -> References -> check boxes for Microsoft Scripting Runtime and Microsoft XML v6.0
+'update address of your web server in line 19
+
+'Test Data:
+'1369 El Hito Cir, Pacific Palisades, CA 90272
+'15007 Bestor Blvd, Pacific Palisades, CA 90272
+
+Option Explicit
+Function GetFireData(address As String) As String
+    Dim http As Object
+    Dim result As String
+    Dim url As String
+    Dim payload As String
+    
+    url = "https://your_server:5000/check-address"
+    Set http = CreateObject("MSXML2.XMLHTTP")
+    payload = "{""address"": """ & address & """}"
+    
+    http.Open "POST", url, False
+    http.setRequestHeader "Content-Type", "application/json"
+    http.Send payload
+    
+    If http.Status = 200 Then
+        Dim responseText As String
+        responseText = http.responseText
+        
+        ' Extract coordinates using string functions
+        Dim lat As String, lng As String
+        Dim coordStart As Long, coordEnd As Long
+        
+        ' Find the coordinates array
+        coordStart = InStr(responseText, "[") + 1
+        coordEnd = InStr(responseText, "]")
+        
+        ' Get the coordinate string and split it
+        Dim coordStr As String
+        coordStr = Mid(responseText, coordStart, coordEnd - coordStart)
+        
+        ' Split the coordinates
+        lat = Split(coordStr, ",")(0)
+        lng = Trim(Split(coordStr, ",")(1))
+        
+        ' Extract inside_polygon status
+        Dim insidePolygon As String
+        If InStr(responseText, """inside_polygon"":true") > 0 Then
+            insidePolygon = "Inside Fire Perimeter"
+        Else
+            insidePolygon = "Outside Fire Perimeter"
+        End If
+        
+        ' Combine the results
+        result = lng & "," & lat & ", " & insidePolygon
+        
+    Else
+        result = "Error: " & http.Status & " - " & http.StatusText
+    End If
+    
+    GetFireData = result
+End Function

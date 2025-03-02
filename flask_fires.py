@@ -47,7 +47,10 @@ class RequestLogger:
                     'Latitude',
                     'Longitude',
                     'KML File',
+<<<<<<< HEAD
                     'Placemark Name',  # Added placemark name
+=======
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
                     'Inside Fire Perimeter',
                     'Response Time (ms)',
                     'HTTP Status',
@@ -74,7 +77,10 @@ class RequestLogger:
             kwargs.get('latitude', ''),                  # Latitude
             kwargs.get('longitude', ''),                 # Longitude
             kwargs.get('kml_file', ''),                  # KML File Path
+<<<<<<< HEAD
             kwargs.get('placemark_name', ''),            # Placemark Name
+=======
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
             kwargs.get('inside_perimeter', ''),          # Inside Fire Perimeter
             kwargs.get('response_time_ms', ''),          # Response Time
             kwargs.get('http_status', ''),               # HTTP Status
@@ -239,9 +245,14 @@ def check_address():
     # Get input data
     data = request.json
     address = data.get('address')
+<<<<<<< HEAD
     placemark_name = data.get('placemark_name', 'PALISADES')  # Get the placemark name from request or use default
     kml_path = '/home/medukonis/Downloads/doc.kml'
     api_key = 'AIzaSyAh2CHG6fNAVkpD8mdomsMF9nl95WzjVL4'
+=======
+    kml_path = 'path to saved kml - see above to retrieve from official source '
+    api_key = 'your google api key'
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
 
     # Prepare base logging data
     log_data = {
@@ -249,7 +260,10 @@ def check_address():
         'user_agent': request.headers.get('User-Agent', ''),
         'address': address,
         'kml_file': kml_path,
+<<<<<<< HEAD
         'placemark_name': placemark_name,  # Add placemark name to the log data
+=======
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
         'success': False
     }
 
@@ -266,13 +280,24 @@ def check_address():
 
     try:
         # Parse KML and geocode address
+<<<<<<< HEAD
         polygons = parse_kml(kml_path, placemark_name=placemark_name)  # Use the provided placemark name
+=======
+        polygons = parse_kml(kml_path, placemark_name='PALISADES')
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
         address_coords = geocode_address(address, api_key)
         reversed_coords = (address_coords[1], address_coords[0])
         point = Point(address_coords)  # Create Shapely Point object
         is_inside = is_point_in_polygon(address_coords, polygons)
 
         # Calculate distance if the point is not inside any polygon
+<<<<<<< HEAD
+=======
+        #distance = None
+        #if not is_inside:
+           #distance = distance_to_nearest_polygon(point, polygons)
+        # Calculate distance if the point is not inside any polygon
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
         distance = 0 if is_inside else round(distance_to_nearest_polygon(point, polygons), 1)
 
         # Update log data with successful results
@@ -291,9 +316,13 @@ def check_address():
             "address": address,
             "coordinates": reversed_coords,
             "inside_polygon": is_inside,
+<<<<<<< HEAD
             "distance_to_perimeter": round(distance, 1),  # Round to one decimal point
             "placemark_name": placemark_name,  # Include the placemark name in the response
             "message": f"{'Inside' if is_inside else 'Outside'} {placemark_name} fire perimeter" + (f", {distance} miles away" if not is_inside else "")
+=======
+            "distance_to_Palisades_fire_perimeter": round(distance, 1)  # Round to one decimal point
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
         })
 
     except Exception as e:
@@ -306,6 +335,7 @@ def check_address():
         logger.log_request(**log_data)
         return jsonify({"error": error_message}), 500
 
+<<<<<<< HEAD
 @app.route('/get-polygons', methods=['GET'])
 def get_polygons():
     kml_path = '/home/medukonis/Downloads/doc.kml'
@@ -332,3 +362,7 @@ def extract_polygon_names(kml_file):
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, ssl_context=('/etc/apache2/ssl/edukonis_com.pem', '/etc/apache2/ssl/edukonis_com.key'))
+=======
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000, ssl_context=('/etc/apache2/ssl/your_certificate_file.pem', '/etc/apache2/ssl/your_key_file.key'))
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f

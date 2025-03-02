@@ -72,7 +72,11 @@
                 address = address.trim();
                 if (address === "") continue;
 
+<<<<<<< HEAD
                 const response = await fetch("https://edukonis.com:5000/check-address", {
+=======
+                const response = await fetch("flask/webserver address:5000/check-address", {
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -80,7 +84,11 @@
                     body: JSON.stringify({
                         address: address,
                         api_key: "1",
+<<<<<<< HEAD
                         kml_path: '/home/medukonis/Downloads/doc.kml',
+=======
+                        kml_path: 'path_to_kml_on_server',
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
                     }),
                 });
 
@@ -93,6 +101,7 @@
     </script>
 </head>
 <body>
+<<<<<<< HEAD
     <h1>KML Polygon Address Checker for California Wildfires</h1>
     <p>Map updated 2/8/2025 - Perimeter maps obtained from: <a href="https://data-nifc.opendata.arcgis.com/maps/d1c32af3212341869b3c810f1a215824" target="0"> WFIGS Current Interagency Fire Perimeters</a></p>
     <p>Enter addresses (one per line):</p>
@@ -152,4 +161,17 @@
     </script>
 </body>
 
+=======
+    <h1>Palisades Fire Address Checker</h1>
+    <p>Map updated 2/8/2025 - Perimeter maps obtained from: <a href="https://data-nifc.opendata.arcgis.com/maps/d1c32af3212341869b3c810f1a215824" target="0"> WFIGS Current Interagency Fire Perimeters</a></p>
+    <p>Enter addresses (one per line):</p>
+    <textarea id="addresses" rows="10" cols="50" placeholder="Enter addresses here..."></textarea><br>
+    <!--
+    <input type="text" id="api_key" placeholder="1"><br>
+    -->
+    <button onclick="checkAddresses()">Check Addresses</button>
+    <h2>Results:</h2>
+    <pre id="results"></pre>
+</body>
+>>>>>>> 57b5a9dda4d663ddcd268f198fdc7f5623fab86f
 </html>

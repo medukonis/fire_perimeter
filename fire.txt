@@ -1,15 +1,15 @@
-'Mike Edukonis
-'updated 3/2/2025 to include ability to retrieve data based on polygon name
 'rename fire.txt to fire.bas
 'open new excel sheet and save as .xslm
 'open developer tools
 'File -> import module fire.bas
 'Tools -> References -> check boxes for Microsoft Scripting Runtime and Microsoft XML v6.0
-'update address of your web server in line 19
+'update address of your web server in line 29
 
 ' Example usage:
 ' =GetFireData("1369 El Hito Cir, Pacific Palisades, CA 90272", "Eaton")
 ' =GetFireData(A2, A3)  ' Where A2 contains the address and A3 contains the polygon name
+' =GetFireData("15007 Bestor Blvd, Pacific Palisades, CA 90272")
+' =GetFireData(A3)  ' Where A3 contains the address
 
 Option Explicit
 Function GetFireData(address As Variant, Optional polygonName As String = "") As String
@@ -26,7 +26,7 @@ Function GetFireData(address As Variant, Optional polygonName As String = "") As
         addressStr = CStr(address)
     End If
 
-    url = "https://edukonis.com:5000/check-address"
+    url = "https://yourwebserver.com/check-address"
     Set http = CreateObject("MSXML2.XMLHTTP")
 
     ' Create payload with optional polygon name
@@ -101,4 +101,5 @@ Function GetFireData(address As Variant, Optional polygonName As String = "") As
 
     GetFireData = result
 End Function
+
 

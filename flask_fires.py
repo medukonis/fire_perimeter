@@ -247,7 +247,7 @@ def check_address():
     address = data.get('address')
     placemark_name = data.get('placemark_name', 'PALISADES')  # Get the placemark name from request or use default
     kml_path = '/home/medukonis/Downloads/doc.kml'
-    api_key = 'AIzaSyAh2CHG6fNAVkpD8mdomsMF9nl95WzjVL4'
+    api_key = 'GOOGLE API KEY'
 
     # Prepare base logging data
     log_data = {
@@ -337,4 +337,4 @@ def extract_polygon_names(kml_file):
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, ssl_context=('/etc/apache2/ssl/edukonis_com.pem', '/etc/apache2/ssl/edukonis_com.key'))
+    app.run(host="0.0.0.0", port=5000, ssl_context=('/etc/apache2/ssl/ssh_pemfile.pem', '/etc/apache2/ssl/ssh_keyfile.key'))

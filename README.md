@@ -1,13 +1,15 @@
-# Wildfire Perimeter Address Check API
+# KML Polygon Perimeter Address Check API
+4/5/2025 - Updated to take an address and test it against all polygons in the KML file not just wildfires.  doc1.kml has the wildfire perimeters only.  doc2.kml still has wildfire perimeters from CALFire however I also added polygons for two recent disaster declarations in NY and IL.  These are very small apartment fires so the damage areas should be very tight and the polygon reflects that.  Government disaster declarations are typically by US County as the smallest area or jurisdiction. 
 
 ## Overview
-This Flask-based API checks whether a given address falls within a wildfire perimeter. The script utilizes KML data from wildfire agencies and integrates with the Google Geocoding API to determine the geographical location of the input address.
+This Flask-based API checks whether a given address falls within a KML polygon. The script utilizes KML data from wildfire or other agencies and integrates with the Google Geocoding API to determine the geographical location of the input address.
+If the address is within the polygon, the app returns true and 0 for distance.  Otherwise, if the address is outside the polygon, the application returns false and gives distance in miles and name of nearest polygon.
 
 ## Features
-- Parses KML files to extract wildfire perimeter polygons.
+- Parses KML files to extract perimeter polygons.
 - Uses the Google Geocoding API to obtain latitude and longitude for a given address.
 - Checks if the geocoded point falls within a wildfire perimeter.
-- Calculates the distance to the nearest fire perimeter if the address is outside.
+- Calculates the distance to the nearest polygon perimeter if the address is outside.
 - Logs all API requests and responses to a CSV file.
 - Supports CORS for cross-origin requests.
 
@@ -19,7 +21,11 @@ This Flask-based API checks whether a given address falls within a wildfire peri
 - Shapely
 - Requests
 - xml.etree.ElementTree (built-in)
-- Werkzeug (for proxy handling)
+- csv
+- datetime
+- time
+- os
+- geopy
 
 ### API Key
 - Google Maps Geocoding API key is required to convert addresses to latitude/longitude.
@@ -99,5 +105,5 @@ The system logs all requests to `address_checks.csv` with details such as:
 
 ## Author
 Mike Edukonis
-Updated: March 2, 2025
+Updated: April 6, 2025
 

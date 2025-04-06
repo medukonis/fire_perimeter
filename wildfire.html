@@ -72,7 +72,7 @@
                 address = address.trim();
                 if (address === "") continue;
 
-                const response = await fetch("https://YOURSERVER.com:5000/check-address", {
+                const response = await fetch("https://edukonis.com/check-address", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -80,7 +80,7 @@
                     body: JSON.stringify({
                         address: address,
                         api_key: "1",
-                        kml_path: 'PATH TO KML FILE',
+                        kml_path: '/home/medukonis/Downloads/doc.kml',
                     }),
                 });
 
@@ -93,63 +93,40 @@
     </script>
 </head>
 <body>
-    <h1>KML Polygon Address Checker for California Wildfires</h1>
-    <p>Map updated 2/8/2025 - Perimeter maps obtained from: <a href="https://data-nifc.opendata.arcgis.com/maps/d1c32af3212341869b3c810f1a215824" target="0"> WFIGS Current Interagency Fire Perimeters</a></p>
+    <h1>KML Polygon Address Checker</h1>
+    <p>Map updated 4/5/2025 to Eaton and Palisades fires (CA), Bronx Apartment fire (NY), and Tatra Apartment Fire (IL). CA Fire perimeters obtained from: <a href="https://data-nifc.opendata.arcgis.com/maps/d1c32af3212341869b3c810f1a215824" target="0"> WFIGS Current Interagency Fire Perimeters</a></p>
     <p>Enter addresses (one per line):</p>
-    <label for="polygonSelect">Select Fire Perimeter:</label>
-    <select id="polygonSelect"></select>
-    <br>
-    <textarea id="addresses" rows="5" cols="50" placeholder="Enter addresses, one per line..."></textarea>
-    <br>
-    <button onclick="checkAddresses()">Check Address</button>
-    <pre id="results"></pre>
+<textarea id="addresses" rows="5" cols="50" placeholder="Enter addresses, one per line..."></textarea>
+<br>
+<button onclick="checkAddresses()">Check Address</button>
+<pre id="results"></pre>
 
-    <script>
-        async function loadPolygons() {
-            const response = await fetch("https://YOURSERVER:5000/get-polygons");
+<script>
+    async function checkAddresses() {
+        const addresses = document.getElementById("addresses").value
+            .split("\n")
+            .map(a => a.trim())
+            .filter(a => a !== "");
+
+        if (addresses.length === 0) {
+            alert("Please enter at least one address.");
+            return;
+        }
+
+        let results = [];
+        for (let address of addresses) {
+            const response = await fetch("https://edukonis.com/check-address", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ address: address }),
+            });
+
             const data = await response.json();
-
-            if (data.polygons) {
-                const dropdown = document.getElementById("polygonSelect");
-                dropdown.innerHTML = ""; // Clear existing options
-                data.polygons.forEach(name => {
-                    const option = document.createElement("option");
-                    option.value = name;
-                    option.textContent = name;
-                    dropdown.appendChild(option);
-                });
-            }
+            results.push(data);
         }
 
-        async function checkAddresses() {
-            const addresses = document.getElementById("addresses").value.split("\n").map(a => a.trim()).filter(a => a !== "");
-            const polygonName = document.getElementById("polygonSelect").value;
-
-            if (addresses.length === 0) {
-                alert("Please enter at least one address.");
-                return;
-            }
-
-            let results = [];
-            for (let address of addresses) {
-                const response = await fetch("https://YOURSERVER:5000/check-address", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        address: address,
-                        placemark_name: polygonName
-                    }),
-                });
-
-                const data = await response.json();
-                results.push(data);
-            }
-
-            document.getElementById("results").textContent = JSON.stringify(results, null, 2);
-        }
-
-        window.onload = loadPolygons;
-    </script>
+        document.getElementById("results").textContent = JSON.stringify(results, null, 2);
+    }
+</script>
 </body>
-
 </html>

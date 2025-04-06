@@ -1,5 +1,10 @@
 '''
 Author: Mike Edukonis
+Updated April 5, 2025
+Refactored.
+Updated to use with all disasters.  Enter an address and script will tell you if address is within a polygon...and which one.  If it is not
+inside a polygon, which one is closet and how far.
+
 Update March 2, 2025
 Palisades fire is 100% contained and there will be no more updates to the fire perimeters file
 There are several fires in CA and each polygon has it's own name.  User can now select which fire polygon to check against an address'
@@ -9,6 +14,9 @@ Description: This script provides a Flask-based API to check if a given address 
 by parsing KML data and using the Google Geocoding API. to get an updated perimeter map
 WFIGS Current Interagency Fire Perimeters https://data-nifc.opendata.arcgis.com/maps/d1c32af3212341869b3c810f1a215824
 
+'Test Data:
+'1369 El Hito Cir, Pacific Palisades, CA 90272
+'15007 Bestor Blvd, Pacific Palisades, CA 90272
 '''
 
 from flask import Flask, request, jsonify
@@ -16,12 +24,19 @@ from flask_cors import CORS
 from shapely.geometry import Point, Polygon
 import xml.etree.ElementTree as ET
 import requests
-from werkzeug.middleware.proxy_fix import ProxyFix
 import csv
 from datetime import datetime
 import os
 import time
 from math import radians, sin, cos, sqrt, atan2
+from shapely.ops import nearest_points
+from geopy.distance import geodesic
+
+GOOGLE_MAPS_API_KEY = "YOUR API KEY HERE"
+
+# Absolute path or relative to script
+kml_path = os.path.join(os.path.dirname(__file__), '/home/medukonis/Downloads/doc2.kml')
+
 
 '''
 Class: RequestLogger
@@ -53,8 +68,9 @@ class RequestLogger:
                     'Latitude',
                     'Longitude',
                     'KML File',
-                    'Placemark Name',  # Added placemark name
+                    'Polygon Name',
                     'Inside Fire Perimeter',
+                    'Distance',
                     'Response Time (ms)',
                     'HTTP Status',
                     'Success',
@@ -82,6 +98,7 @@ class RequestLogger:
             kwargs.get('kml_file', ''),                  # KML File Path
             kwargs.get('placemark_name', ''),            # Placemark Name
             kwargs.get('inside_perimeter', ''),          # Inside Fire Perimeter
+            kwargs.get('distance', ''),
             kwargs.get('response_time_ms', ''),          # Response Time
             kwargs.get('http_status', ''),               # HTTP Status
             kwargs.get('success', False),                # Success
@@ -92,6 +109,7 @@ class RequestLogger:
             writer = csv.writer(f)
             writer.writerow(row)
 
+logger = RequestLogger()
 app = Flask(__name__)
 CORS(app)
 '''
@@ -136,38 +154,43 @@ Inputs:
 Outputs:
     list: List of Shapely Polygon objects.
 '''
-def parse_kml(kml_file, placemark_name='PALISADES'):
+def parse_kml(kml_file):
     tree = ET.parse(kml_file)
     root = tree.getroot()
     namespace = {'kml': 'http://www.opengis.net/kml/2.2'}
 
     polygons = []
     for placemark in root.findall(".//kml:Placemark", namespace):
-        # Check for specific placemark name
         name_elem = placemark.find('kml:name', namespace)
-        if name_elem is not None and name_elem.text == placemark_name:
-            for polygon in placemark.findall(".//kml:Polygon", namespace):
-                # Parse outer boundary
-                outer_coords_text = polygon.find(".//kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", namespace).text.strip()
-                outer_coords = [
+        name = name_elem.text if name_elem is not None else "Unnamed"
+
+        for polygon in placemark.findall(".//kml:Polygon", namespace):
+            # Outer boundary
+            outer_coords_text = polygon.find(".//kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", namespace).text.strip()
+            outer_coords = [
+                (float(lon), float(lat))
+                for lon, lat, _ in (coord.split(",") for coord in outer_coords_text.split())
+            ]
+
+            # Inner boundaries (holes)
+            inner_coords_list = []
+            for inner_boundary in polygon.findall(".//kml:innerBoundaryIs/kml:LinearRing/kml:coordinates", namespace):
+                inner_coords_text = inner_boundary.text.strip()
+                inner_coords = [
                     (float(lon), float(lat))
-                    for lon, lat, _ in (coord.split(",") for coord in outer_coords_text.split())
+                    for lon, lat, _ in (coord.split(",") for coord in inner_coords_text.split())
                 ]
+                inner_coords_list.append(inner_coords)
 
-                # Parse inner boundaries (holes)
-                inner_coords_list = []
-                for inner_boundary in polygon.findall(".//kml:innerBoundaryIs/kml:LinearRing/kml:coordinates", namespace):
-                    inner_coords_text = inner_boundary.text.strip()
-                    inner_coords = [
-                        (float(lon), float(lat))
-                        for lon, lat, _ in (coord.split(",") for coord in inner_coords_text.split())
-                    ]
-                    inner_coords_list.append(inner_coords)
-
-                # Create a polygon with holes
-                polygons.append(Polygon(shell=outer_coords, holes=inner_coords_list))
+            # Append full polygon with name
+            polygons.append((Polygon(shell=outer_coords, holes=inner_coords_list), name))
 
     return polygons
+
+# Parse the KML and store the polygon data for later use
+polygons = parse_kml(kml_path)
+
+print(f"Loaded {len(polygons)} polygons from {kml_path}")
 
 # Step 2: Use Google Geocoding API to get latitude and longitude for an address
 '''
@@ -179,9 +202,9 @@ Inputs:
 Outputs:
     tuple: Longitude and latitude of the address.
 '''
-def geocode_address(address, api_key):
+def geocode_address(address):
     url = f"https://maps.googleapis.com/maps/api/geocode/json"
-    params = {"address": address, "key": api_key}
+    params = {"address": address, "key": GOOGLE_MAPS_API_KEY}
     response = requests.get(url, params=params)
     if response.status_code == 200:
         data = response.json()
@@ -193,128 +216,116 @@ def geocode_address(address, api_key):
     else:
         raise ConnectionError(f"Error connecting to Geocoding API: {response.status_code}")
 
-# Step 3: Check if the point is inside any polygon
-'''
-Function: is_point_in_polygon
-Description: Checks if a point is inside any of the given polygons.
-Inputs:
-    address_coords (tuple): Coordinates (longitude, latitude) of the address.
-    polygons (list): List of Shapely Polygon objects.
-Outputs:
-    bool: True if inside a polygon, otherwise False.
-'''
-def is_point_in_polygon(address_coords, polygons):
-    point = Point(address_coords)
-    for polygon in polygons:
-        if polygon.contains(point):
-            return True
-    return False
 
-"""
-Function: distance_to_nearest_polygon
-Description:
-    Calculates the shortest distance from a given point to the nearest polygon
-    in a list of polygons. The distance is computed using the Haversine formula.
-
-Inputs:
-    - point (shapely.geometry.Point): The geographical point to check.
-    - polygons (list of shapely.geometry.Polygon): A list of polygons representing
-      different geographic areas.
-
-Outputs:
-    - (float): The minimum distance from the point to the nearest polygon in miles.
-"""
-def distance_to_nearest_polygon(point, polygons):
-    distances = [haversine_distance(point, polygon) for polygon in polygons]
-    return min(distances)
-
-# API Route to check if an address is inside a polygon
-@app.route('/check-address', methods=['POST', 'OPTIONS'])
+#API Route to check if an address is inside a polygon
+#Contains Step 3: Check if the point is inside any polygon
+@app.route('/check-address', methods=['POST'])
 def check_address():
-    if request.method == 'OPTIONS':
-        response = app.response_class(status=200)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-        return response
-
-    # Initialize logger and start timer
-    logger = RequestLogger()
     start_time = time.time()
 
-    # Get input data
     data = request.json
     address = data.get('address')
-    placemark_name = data.get('placemark_name', 'PALISADES')  # Get the placemark name from request or use default
-    kml_path = '/home/medukonis/Downloads/doc.kml'
-    api_key = 'GOOGLE API KEY'
 
-    # Prepare base logging data
-    log_data = {
-        'ip_address': request.remote_addr,
-        'user_agent': request.headers.get('User-Agent', ''),
-        'address': address,
-        'kml_file': kml_path,
-        'placemark_name': placemark_name,  # Add placemark name to the log data
-        'success': False
-    }
+    ip_address = request.remote_addr
+    user_agent = request.headers.get('User-Agent', 'Unknown')
 
     if not address:
-        log_data.update({
-            'http_status': 400,
-            'error_message': 'Missing required parameter: address',
-            'response_time_ms': int((time.time() - start_time) * 1000)
-        })
-        logger.log_request(**log_data)
-        response = jsonify({"error": "Missing required parameter: address"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 400
+        logger.log_request(
+            ip_address=ip_address,
+            user_agent=user_agent,
+            address='',
+            kml_file=kml_path,
+            http_status=400,
+            success=False,
+            error_message="No address provided",
+            response_time_ms=round((time.time() - start_time) * 1000, 2)
+        )
+        return jsonify({"error": "No address provided."}), 400
 
     try:
-        # Parse KML and geocode address
-        polygons = parse_kml(kml_path, placemark_name=placemark_name)  # Use the provided placemark name
-        address_coords = geocode_address(address, api_key)
-        reversed_coords = (address_coords[1], address_coords[0])
-        point = Point(address_coords)  # Create Shapely Point object
-        is_inside = is_point_in_polygon(address_coords, polygons)
+        lon, lat = geocode_address(address)
+        if lat is None or lon is None:
+            raise ValueError("Failed to geocode address.")
+    except Exception as e:
+        logger.log_request(
+            ip_address=ip_address,
+            user_agent=user_agent,
+            address=address,
+            kml_file=kml_path,
+            http_status=500,
+            success=False,
+            error_message=str(e),
+            response_time_ms=round((time.time() - start_time) * 1000, 2)
+        )
+        return jsonify({"error": str(e)}), 500
 
-        # Calculate distance if the point is not inside any polygon
-        distance = 0 if is_inside else round(distance_to_nearest_polygon(point, polygons), 1)
+    point = Point(lon, lat)
+    inside_polygon_name = None
+    closest_polygon_name = None
+    closest_distance_miles = float("inf")
 
-        # Update log data with successful results
-        log_data.update({
-            'latitude': reversed_coords[0],
-            'longitude': reversed_coords[1],
-            'inside_perimeter': is_inside,
-            'http_status': 200,
-            'success': True,
-            'response_time_ms': int((time.time() - start_time) * 1000)
-        })
+    for polygon, name in polygons:
+        if polygon.contains(point):
+            inside_polygon_name = name
+            break
+        else:
+            nearest_geom = nearest_points(polygon.boundary, point)[0]
+            distance_miles = geodesic((lat, lon), (nearest_geom.y, nearest_geom.x)).miles
+            if distance_miles < closest_distance_miles:
+                closest_distance_miles = distance_miles
+                closest_polygon_name = name
 
-        logger.log_request(**log_data)
+    response_time = round((time.time() - start_time) * 1000, 2)
 
+    if inside_polygon_name:
+        logger.log_request(
+            ip_address=ip_address,
+            user_agent=user_agent,
+            address=address,
+            latitude=lat,
+            longitude=lon,
+            kml_file=kml_path,
+            placemark_name=inside_polygon_name,
+            inside_perimeter=True,
+            distance=0,
+            http_status=200,
+            success=True,
+            response_time_ms=response_time
+        )
         return jsonify({
             "address": address,
-            "coordinates": reversed_coords,
-            "inside_polygon": is_inside,
-            "distance_to_perimeter": round(distance, 1),  # Round to one decimal point
-            "placemark_name": placemark_name,  # Include the placemark name in the response
-            "message": f"{'Inside' if is_inside else 'Outside'} {placemark_name} fire perimeter" + (f", {distance} miles away" if not is_inside else "")
+            "inside": True,
+            "polygon": inside_polygon_name,
+            "lat": lat,
+            "lon": lon
         })
-
-    except Exception as e:
-        error_message = str(e)
-        log_data.update({
-            'http_status': 500,
-            'error_message': error_message,
-            'response_time_ms': int((time.time() - start_time) * 1000)
+    else:
+        logger.log_request(
+            ip_address=ip_address,
+            user_agent=user_agent,
+            address=address,
+            latitude=lat,
+            longitude=lon,
+            kml_file=kml_path,
+            placemark_name=closest_polygon_name,
+            inside_perimeter=False,
+            distance=round(closest_distance_miles, 1),
+            http_status=200,
+            success=True,
+            response_time_ms=response_time
+        )
+        return jsonify({
+            "address": address,
+            "inside": False,
+            "closest_polygon": closest_polygon_name,
+            "distance_miles": round(closest_distance_miles, 1),
+            "lat": lat,
+            "lon": lon
         })
-        logger.log_request(**log_data)
-        return jsonify({"error": error_message}), 500
 
 @app.route('/get-polygons', methods=['GET'])
 def get_polygons():
-    kml_path = '/home/medukonis/Downloads/doc.kml'
+    kml_path = '/home/medukonis/Downloads/doc2.kml'
     try:
         polygon_names = extract_polygon_names(kml_path)
         return jsonify({"polygons": polygon_names})
@@ -337,4 +348,4 @@ def extract_polygon_names(kml_file):
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, ssl_context=('/etc/apache2/ssl/ssh_pemfile.pem', '/etc/apache2/ssl/ssh_keyfile.key'))
+    app.run(host="0.0.0.0", port=5000, ssl_context=('/etc/apache2/ssl/edukonis_com.pem', '/etc/apache2/ssl/edukonis_com.key'))

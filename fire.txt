@@ -1,108 +1,101 @@
-'Mike Edukonis
-'updated 3/2/2025
-'input 1 - address
-'input 2 - polygon name
-
 'rename fire.txt to fire.bas
 'open new excel sheet and save as .xslm
 'open developer tools
 'File -> import module fire.bas
 'Tools -> References -> check boxes for Microsoft Scripting Runtime and Microsoft XML v6.0
-'update address of your web server in line 29
 
-' Example usage:
-' =GetFireData("1369 El Hito Cir, Pacific Palisades, CA 90272", "Eaton")
-' =GetFireData(A2, A3)  ' Where A2 contains the address and A3 contains the polygon name
+'Test Data:
+'1369 El Hito Cir, Pacific Palisades, CA 90272
+'15007 Bestor Blvd, Pacific Palisades, CA 90272
 
 Option Explicit
-Function GetFireData(address As Variant, Optional polygonName As String = "") As String
+
+Function GetFireData(address As String) As String
     Dim http As Object
     Dim result As String
     Dim url As String
     Dim payload As String
-    Dim addressStr As String
-
-    ' Handle case where address might be passed as a cell reference without quotes
-    If TypeName(address) = "Range" Then
-        addressStr = address.Value
-    Else
-        addressStr = CStr(address)
-    End If
-
-    url = "https://yourwebserver.com/check-address"
+    
+    url = "https://edukonis.com/check-address"
     Set http = CreateObject("MSXML2.XMLHTTP")
-
-    ' Create payload with optional polygon name
-    If polygonName = "" Then
-        payload = "{""address"": """ & addressStr & """}"
-    Else
-        payload = "{""address"": """ & addressStr & """, ""placemark_name"": """ & polygonName & """}"
-    End If
-
+    payload = "{""address"": """ & address & """}"
+    
     http.Open "POST", url, False
     http.setRequestHeader "Content-Type", "application/json"
     http.Send payload
-
+    
     If http.Status = 200 Then
         Dim responseText As String
         responseText = http.responseText
-
-        ' Extract coordinates using string functions
-        Dim lat As String, lng As String
-        Dim coordStart As Long, coordEnd As Long
-
-        ' Find the coordinates array
-        coordStart = InStr(responseText, "[") + 1
-        coordEnd = InStr(coordStart, responseText, "]")
-
-        ' Get the coordinate string and split it
-        Dim coordStr As String
-        coordStr = Mid(responseText, coordStart, coordEnd - coordStart)
-
-        ' Split the coordinates
-        lat = Split(coordStr, ",")(0)
-        lng = Trim(Split(coordStr, ",")(1))
-
-        ' Extract inside_polygon status
-        Dim insidePolygon As String
-        If InStr(responseText, """inside_polygon"":true") > 0 Then
-            insidePolygon = "Inside Fire Perimeter"
+        
+        ' Extract data from the JSON response
+        Dim lat As String, lon As String
+        Dim insidePolygon As Boolean
+        Dim closestPolygon As String, distanceMiles As String
+        Dim polygonName As String
+        
+        ' Extract coordinates
+        lat = ExtractJSONValue(responseText, "lat", False)
+        lon = ExtractJSONValue(responseText, "lon", False)
+        
+        ' Extract inside status
+        Dim insideStr As String
+        insideStr = ExtractJSONValue(responseText, "inside", False)
+        insidePolygon = (LCase(insideStr) = "true")
+        
+        ' Extract polygon info
+        If insidePolygon Then
+            ' If inside is true, get the polygon name from the "polygon" field
+            polygonName = ExtractJSONValue(responseText, "polygon", True)
+            'closestPolygon = ""
+            distanceMiles = "0.0"
         Else
-            insidePolygon = "Outside Fire Perimeter"
+            ' If outside, get the closest polygon and distance
+            polygonName = ExtractJSONValue(responseText, "closest_polygon", True)
+            'closestPolygon = ExtractJSONValue(responseText, "closest_polygon", True)
+            distanceMiles = ExtractJSONValue(responseText, "distance_miles", False)
         End If
-
-        ' Extract distance_to_perimeter
-        Dim distanceStart As Long, distanceEnd As Long
-        Dim distance As String
-        distanceStart = InStr(responseText, """distance_to_perimeter"":") + 23
-        distanceEnd = InStr(distanceStart, responseText, ",")
-        distance = Mid(responseText, distanceStart, distanceEnd - distanceStart)
-
-        ' Extract placemark_name
-        Dim placemarkStart As Long, placemarkEnd As Long
-        Dim placemark As String
-        placemarkStart = InStr(responseText, """placemark_name"":") + 17
-        placemarkEnd = InStr(placemarkStart, responseText, """}")
-        placemark = Mid(responseText, placemarkStart, placemarkEnd - placemarkStart)
-
-        ' Extract message
-        Dim messageStart As Long, messageEnd As Long
-        Dim message As String
-        messageStart = InStr(responseText, """message"":") + 11
-        messageEnd = InStr(messageStart, responseText, """,")
-        message = Mid(responseText, messageStart, messageEnd - messageStart)
-
-        ' Combine the results
-        result = lng & "," & lat & ", " & insidePolygon & ", " & _
-                 "Distance: " & distance & " miles, " & _
-                 "Fire: " & placemark & ", " & _
-                 "Message: " & message
-
+        
+        ' Format the result as CSV
+        ' Format: lat,long,inside_polygon,polygon_name,nearest_polygon,distance
+        result = lat & "," & lon & ","
+        result = result & (IIf(insidePolygon, "TRUE", "FALSE")) & ","
+        result = result & polygonName & ","
+        'result = result & closestPolygon & ","
+        result = result & distanceMiles
+        
     Else
-        result = "Error: " & http.Status & " - " & http.StatusText
+        result = "ERROR," & http.Status & "," & http.StatusText & ",,,,"
     End If
-
+    
     GetFireData = result
 End Function
 
-
+' Helper function to parse JSON values
+Function ExtractJSONValue(jsonText As String, key As String, isString As Boolean) As String
+    Dim keyPattern As String
+    Dim valueStart As Long, valueEnd As Long
+    
+    If isString Then
+        keyPattern = """" & key & """:"""
+        valueStart = InStr(jsonText, keyPattern) + Len(keyPattern)
+        If valueStart > Len(keyPattern) Then
+            valueEnd = InStr(valueStart, jsonText, """")
+            ExtractJSONValue = Mid(jsonText, valueStart, valueEnd - valueStart)
+        Else
+            ExtractJSONValue = ""
+        End If
+    Else
+        keyPattern = """" & key & """:"
+        valueStart = InStr(jsonText, keyPattern) + Len(keyPattern)
+        If valueStart > Len(keyPattern) Then
+            valueEnd = InStr(valueStart, jsonText, ",")
+            If valueEnd = 0 Then ' might be at the end of an object
+                valueEnd = InStr(valueStart, jsonText, "}")
+            End If
+            ExtractJSONValue = Mid(jsonText, valueStart, valueEnd - valueStart)
+        Else
+            ExtractJSONValue = ""
+        End If
+    End If
+End Function
